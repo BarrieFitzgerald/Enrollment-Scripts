@@ -12,18 +12,21 @@ college.analysis <- function() {
         cy.query <- paste("select term_desc, levl_code,majr_code1 from BANNER_FILES.DW_STUDENT_ENROLLMENT_SUMMARY 
                           where term_code_key = '", cy.term, "' and daterun = '", cy.date, "'", sep = "")
         ## Data Connection Established
-        data.connection <- odbcConnect("TITAN", uid="Enter in your User ID", pwd="Enter in your Password", believeNRows=FALSE)
+        user.name <- readline("User Name: "); password <- readline("Password: ")
+        data.connection <- odbcConnect("TITAN", uid = user.name, pwd = password, believeNRows=FALSE)
         ## Retrieving the data
         term <- rbind(sqlQuery(data.connection, py.query), sqlQuery(data.connection, cy.query))
         ## Closing the connection
         close(data.connection)
         ## importing major and colleges
         setwd("V:/dept/SRA/Enrollment/Enrollment--Fall, Spring, and Summer/1. Fall Enrollment/Fall 2015/College Enrollment Comparison")
-        majors <- read.delim("./majors_and_college.txt", 
-                             header = TRUE, stringsAsFactors = FALSE)
+        majors <- read.delim("./majors_and_college.txt", header = TRUE, stringsAsFactors = FALSE)
+        colleges <- as.data.frame(unique(majors$COLL_DESC))
+        abbrev <- c("COAS", "COBA", "COEHS", "CONHS", "COTA")
+        colleges <- cbind(colleges, abbrev)
+        colnames(colleges) <- c("college", "Abbrev")
         ## merging the term and majors data
-        term <- merge(x = term, y = majors, by.x = "MAJR_CODE1", 
-                      by.y = "MAJR_CODE1", all.x = TRUE)
+        term <- merge(x = term, y = majors, by.x = "MAJR_CODE1", by.y = "MAJR_CODE1", all.x = TRUE)
         ## put data into a table format 
         college <- as.data.frame(table(term$COLL_DESC ,term$TERM_DESC))
         ## Calculating the number and percent difference
@@ -37,18 +40,11 @@ college.analysis <- function() {
         write.csv(college, "overall_college.csv")
         ## Graph of results
         college2 <- college[, c(1, 5)]
-        aa <- readline(paste("Abbrev. for ", as.character(college2[1,1]), ": "))
-        ab <- readline(paste("Abbrev. for ", as.character(college2[2,1]), ": "))
-        ac <- readline(paste("Abbrev. for ", as.character(college2[3,1]), ": "))
-        ad <- readline(paste("Abbrev. for ", as.character(college2[4,1]), ": "))
-        ae <- readline(paste("Abbrev. for ", as.character(college2[5,1]), ": "))
-        college2[,1] <- c(aa, ab, ac, ad, ae)
-        college2 <- ggplot(data = college2, aes(x = College, y = Percent)) +
+        college2 <- merge(x = college2, y = colleges, by.x = "College", by.y = "college", all.x = TRUE)
+        college2 <- college2[, -1]
+        college2 <- ggplot(data = college2, aes(x = Abbrev, y = Percent)) +
                 geom_bar(stat = "identity") + coord_flip()
-        print(college)
-        print(college2)
+        print(college); print(college2)
         ## kicing out the graph
-        png("overall_college.png", width = 1000, height = 500, units = "px")
-        print(college2)
-        dev.off()
+        png("overall_college.png", width = 1000, height = 500, units = "px"); print(college2); dev.off()
 }
