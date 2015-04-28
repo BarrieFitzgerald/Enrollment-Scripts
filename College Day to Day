@@ -43,6 +43,6 @@ college.analysis <- function() {
         college2 <- ggplot(data = college2, aes(x = Abbrev, y = Percent)) +
                 geom_bar(stat = "identity") + coord_flip()
         print(college); print(college2)
-        ## kicing out the graph
+        ## kicking out the graph
         png("overall_college.png", width = 1000, height = 500, units = "px"); print(college2); dev.off()
 }
