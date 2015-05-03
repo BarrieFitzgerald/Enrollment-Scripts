@@ -1,0 +1,111 @@
+sch_gen_comparison <- function() {
+        ## Working directory
+        setwd("V:/dept/SRA/Enrollment/Enrollment--Fall, Spring, and Summer/1. Fall Enrollment/Fall 2015/SCH Generated")
+        ## libraries utilized
+        library(RODBC); library(plyr); library(ggplot2)
+        ## Quested needed for analysis
+        py.term <- readline("Prior Term (e.g., 201408): ")
+        py.date <- readline("Prior Year Date (e.g, 28-April-2014): ")
+        cy.term <- readline("Current Term (e.g., 201508): ")
+        cy.date <- readline("Current Year Date (e.g, 27-April-2015): ")
+        ## user name and password
+        user.name <- readline("User Name: ")
+        password <- readline("Password: ")
+        ## query for courses
+        py.course <- paste("select TERM_CODE_KEY,TERM_DESC, ID, SUBJ_CODE, COURSE_NUMBER, SECTION_CREDIT_HOURS, CAMP_CODE_SECTION, CAMP_DESC_SECTION, DATERUN from BANNER_FILES.DW_STUDENT_REGISTRATION where term_code_key = '", py.term, "'and daterun = '", py.date, "'", sep = "")
+        cy.course <- paste("select TERM_CODE_KEY,TERM_DESC, ID, SUBJ_CODE, COURSE_NUMBER, SECTION_CREDIT_HOURS, CAMP_CODE_SECTION, CAMP_DESC_SECTION, DATERUN from BANNER_FILES.DW_STUDENT_REGISTRATION where term_code_key = '", cy.term, "'and daterun = '", cy.date, "'", sep = "")
+        ## query for residency
+        py.res <- paste("select term_code_key, id, resd_code from BANNER_FILES.DW_STUDENT_ENROLLMENT_SUMMARY where term_code_key = '", py.term, "' and daterun = '", py.date, "'", sep = "")
+        cy.res <- paste("select term_code_key, id, resd_code from BANNER_FILES.DW_STUDENT_ENROLLMENT_SUMMARY where term_code_key = '", cy.term, "' and daterun = '", cy.date, "'", sep = "")
+        ## Data Connection Established
+        data.connection <- odbcConnect("TITAN", uid = user.name, pwd = password, believeNRows=FALSE)
+        ## Retrieving the data
+        term <- rbind(sqlQuery(data.connection, py.course), sqlQuery(data.connection, cy.course))
+        res <- rbind(sqlQuery(data.connection, py.res), sqlQuery(data.connection, cy.res))
+        ## Closing the connection
+        close(data.connection)
+        ## creating links
+        res$link <- paste(res$TERM_CODE_KEY, res$ID, sep = ";")
+        term$link <- paste(term$TERM_CODE_KEY, term$ID, sep = ";")
+        ## creating the residency status
+        res$tuition_residency <- ifelse((res$RESD_CODE == 1 | res$RESD_CODE == 9 |
+                                                 res$RESD_CODE == "B" | res$RESD_CODE == 7 |
+                                                 res$RESD_CODE == 8 |res$RESD_CODE == "M"), 
+                                        "IS", "OOS")
+        res <- res[, 4:5]
+        term <- merge(x = term, y = res, by.x = "link", by.y = "link", all.x = TRUE)
+        ## fixing the NAs
+        term$tuition_residency[is.na(term$tuition_residency) == TRUE] <- "IS"
+        ## creating the course level UG or G
+        term$course_level <- ifelse(as.numeric(substr(term$COURSE_NUMBER, 1, 1)) < 5, 
+                                    "UG", "G")
+        ## creating a tuition type code
+        term$tuition_code[term$CAMP_CODE_SECTION == 5] <- "eTuition"
+        term$tuition_code[term$CAMP_CODE_SECTION == 6] <- "eCore"
+        term$tuition_code[term$CAMP_CODE_SECTION == "GML"] <- "GOML"
+        term$tuition_code[term$CAMP_CODE_SECTION == "EM"] <- "eMajor"
+        term$tuition_code[term$CAMP_CODE_SECTION == 7] <- "WebMBA"
+        term$tuition_code[is.na(term$tuition_code)] <- "Base Rate"
+        term$tuition_code <- ifelse(term$tuition_code == "Base Rate" |
+                                            term$tuition_code == "eTuition", 
+                                    paste(term$course_level, term$tuition_code, sep = "-"), 
+                                    term$tuition_code)
+        term$tuition_code <- ifelse(term$SUBJ_CODE == "NURS" &
+                                            term$course_level == "G", 
+                                    "MSN", term$tuition_code)
+        term$tuition_code <- ifelse(term$SUBJ_CODE == "SOWK" &
+                                            term$course_level == "G", 
+                                    "MSW", term$tuition_code)
+        term$tuition_code <- ifelse(term$SUBJ_CODE == "MBA" &
+                                            term$course_level == "G", 
+                                    "MBA HCAD", term$tuition_code)
+        term$tuition_code <-ifelse((term$tuition_code == "UG-Base Rate" |
+                                            term$tuition_code == "G-Base Rate" |
+                                            term$tuition_code == "MSN" |
+                                            term$tuition_code == "MSW"), 
+                                   paste(term$tuition_code, 
+                                         term$tuition_residency, 
+                                         sep = " "), 
+                                   term$tuition_code)
+        ## producing the results
+        sch_gen <- aggregate(SECTION_CREDIT_HOURS ~ TERM_CODE_KEY +tuition_code, 
+                             data = term, FUN = sum)
+        term_key <- sort(unique(sch_gen$TERM_CODE_KEY))
+        py.sch <- subset(sch_gen, sch_gen$TERM_CODE_KEY == term_key[1], 2:3)
+        cy.sch <- subset(sch_gen, sch_gen$TERM_CODE_KEY == term_key[2], 2:3)
+        ## preparing the number and percent difference
+        sch <- merge(x = py.sch, y = cy.sch, by.x = "tuition_code", by.y = "tuition_code", all = TRUE)
+        colnames(sch) <- c("Tuition", term_key[1], term_key[2])
+        py.sch <- sch[,2]; cy.sch <- sch[,3]
+        Number <- cy.sch - py.sch
+        Percent <- round(cy.sch / py.sch - 1, 3)
+        sch <- cbind(sch, Number, Percent)
+        ## creating order
+        Tuition <-  c("UG-Base Rate IS", "eCore", "eMajor", 
+                      "UG-eTuition", "UG-Base Rate OOS", "G-Base Rate IS", 
+                      "G-eTuition", "GOML", "MBA HCAD", "WebMBA", 
+                      "G-Base Rate OOS", "MSN IS", "MSN OOS", 
+                      "MSW IS", "MSW OOS")
+        Order <- letters[seq( from = 1, to = length(Tuition))]
+        tuition.order <- cbind(Tuition, Order)
+        ## fixing order
+        sch <- merge(x = sch, y = tuition.order, by.x = "Tuition", 
+                     by.y = "Tuition", all.x = TRUE)
+        sch <- arrange(sch, Order)
+        sch <- sch[,-6]
+        ## creating an overall total
+        sch[15, 1] <- "Total"
+        sch[15, 2:3] <- c(sum(sch[, 2], na.rm = TRUE), 
+                          sum(sch[, 3], na.rm = TRUE))
+        sch[15, 4] <- sch[15, 3] - sch[15, 2]
+        sch[15, 5] <- round(sch[15, 3] / sch[15, 2] - 1, 3)
+        print(sch)
+        sch2 <- ggplot(data = sch, aes(x = Tuition, y = Percent)) +
+                geom_bar(stat = "identity") + coord_flip()
+        ## kicking out results
+        setwd("V:/dept/SRA/Enrollment/Enrollment--Fall, Spring, and Summer/1. Fall Enrollment/Fall 2015/SCH Generated/output")
+        write.csv(sch, "sch_gen.csv")
+        png("sch_gen.png", width = 1000, height = 500, units = "px") 
+        print(sch2)
+        dev.off()
+}
