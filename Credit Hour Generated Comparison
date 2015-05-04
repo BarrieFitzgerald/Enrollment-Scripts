@@ -3,7 +3,7 @@ sch_gen_comparison <- function() {
         setwd("V:/dept/SRA/Enrollment/Enrollment--Fall, Spring, and Summer/1. Fall Enrollment/Fall 2015/SCH Generated")
         ## libraries utilized
         library(RODBC); library(plyr); library(ggplot2)
-        ## Quested needed for analysis
+        ## Questions needed for analysis
         py.term <- readline("Prior Term (e.g., 201408): ")
         py.date <- readline("Prior Year Date (e.g, 28-April-2014): ")
         cy.term <- readline("Current Term (e.g., 201508): ")
