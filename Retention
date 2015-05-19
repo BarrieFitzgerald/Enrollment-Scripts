@@ -1,0 +1,25 @@
+retention <- function(){
+        ## Working directory
+        setwd("V:/dept/SRA/Enrollment/Enrollment--Fall, Spring, and Summer/1. Fall Enrollment/Fall 2015/Retention Comparison")
+        ## libraries utilized
+        library(RODBC); library(plyr); library(ggplot2)
+        ## Quested needed for analysis
+        term <- readline("Term (e.g., 201408): ")
+        date <- readline("Date (e.g, 28-April-2014): ")
+        ## user name and password
+        user.name <- readline("User Name: ")
+        password <- readline("Password: ")
+        ## query for courses
+        query <- paste("select id, daterun from BANNER_FILES.DW_STUDENT_ENROLLMENT_SUMMARY where term_code_key = '", term,"' and daterun >= '", date, "'", sep = "")
+        ## Data Connection Established
+        data.connection <- odbcConnect("TITAN", uid = user.name, pwd = password, believeNRows=FALSE)
+        ## Retrieving the data
+        term <- sqlQuery(data.connection, query)
+        ## Closing the connection
+        close(data.connection)
+        ## pulling in the cohort
+        cohort <- data.frame(id = read.table("./cohorts/fall2014cohorts.txt", header = TRUE)[,1])
+        ## finding the number registered for next semester
+        cohort <- merge(x = cohort, y = term, by.x = "id", by.y = "ID", all.x = TRUE)
+        as.data.frame(table(cohort$DATERUN))
+}
